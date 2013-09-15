@@ -1,6 +1,7 @@
 from message import Message
 from utf import encode as encode_utf7
 
+
 class Mailbox():
 
     def __init__(self, gmail, name="INBOX"):
@@ -10,7 +11,6 @@ class Mailbox():
         self.gmail = gmail
         self.date_format = "%d-%b-%Y"
         self.messages = {}
-
 
     def mail(self, prefetch=False, **kwargs):
         search = ['ALL']
@@ -49,8 +49,8 @@ class Mailbox():
         emails = []
         # print search
         response, data = self.gmail.imap.uid('SEARCH', *search)
-        if response == 'OK':    
-            uids = filter(None, data[0].split(' ')) # filter out empty strings
+        if response == 'OK':
+            uids = filter(None, data[0].split(' '))  # filter out empty strings
 
             for uid in uids:
                 if not self.messages.get(uid):
@@ -68,9 +68,8 @@ class Mailbox():
     # WORK IN PROGRESS. NOT FOR ACTUAL USE
     def threads(self, prefetch=False, **kwargs):
         response, data = self.gmail.imap.uid('SEARCH', 'ALL')
-        if response == 'OK':    
-            uids = data[0].split(' ') 
-
+        if response == 'OK':
+            uids = data[0].split(' ')
 
             for uid in uids:
                 if not self.messages.get(uid):
