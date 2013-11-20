@@ -81,6 +81,8 @@ class Gmail():
             del self.mailboxes[mailbox_name]
 
     def login(self, username, password):
+        username = username if '@' in username else username + '@gmail.com'
+
         self.username = username
         self.password = password
 
@@ -100,6 +102,8 @@ class Gmail():
         return self.logged_in
 
     def authenticate(self, username, access_token):
+        username = username if '@' in username else username + '@gmail.com'
+
         self.username = username
         self.access_token = access_token
 
