@@ -1,7 +1,10 @@
 import imaplib
+import smtplib
+import base64
 from mailbox import Mailbox
 from exceptions import AuthenticationError
 import re
+from draft import Draft
 
 
 class Gmail():
@@ -25,6 +28,9 @@ class Gmail():
         self.mailboxes = {}
         self.current_mailbox = None
 
+        self.imap_connected = False
+        self.smtp_connected = False
+
         # self.connect()
 
     def connect(self, raise_errors=True):
@@ -35,15 +41,20 @@ class Gmail():
         #         raise Exception('Connection failure.')
         #     self.imap = None
 
-        self.imap = imaplib.IMAP4_SSL(self.GMAIL_IMAP_HOST, self.GMAIL_IMAP_PORT)
+        if not self.imap_connected:
+            self.imap = imaplib.IMAP4_SSL(self.GMAIL_IMAP_HOST, self.GMAIL_IMAP_PORT)
+            self.imap_connected = True
 
-        # self.smtp = smtplib.SMTP(self.server,self.port)
-        # self.smtp.set_debuglevel(self.debug)
-        # self.smtp.ehlo()
-        # self.smtp.starttls()
-        # self.smtp.ehlo()
+        if not self.smtp_connected:
+            self.smtp = smtplib.SMTP(self.GMAIL_SMTP_HOST, self.GMAIL_SMTP_PORT)
+            self.smtp.ehlo()
+            self.smtp.starttls()
+            self.smtp.ehlo()
+            self.smtp_connected = True
 
-        return self.imap
+    @property
+    def connected(self):
+        return self.imap_connected and self.smtp_connected
 
     def fetch_mailboxes(self):
         response, mailbox_list = self.imap.list()
@@ -86,18 +97,26 @@ class Gmail():
         self.username = username
         self.password = password
 
-        if not self.imap:
+        if not self.connected:
             self.connect()
 
         try:
             imap_login = self.imap.login(self.username, self.password)
-            self.logged_in = (imap_login and imap_login[0] == 'OK')
-            if self.logged_in:
+            imap_logged_in = (imap_login and imap_login[0] == 'OK')
+            if imap_logged_in:
                 self.fetch_mailboxes()
         except imaplib.IMAP4.error:
             raise AuthenticationError
 
-        # smtp_login(username, password)
+        try:
+            self.smtp.login(self.username, self.password)
+            smtp_logged_in = True
+        except (smtplib.SMTPHeloError,
+                smtplib.SMTPAuthenticationError,
+                smtplib.SMTPException):
+            raise AuthenticationError
+
+        self.login = imap_logged_in and smtp_logged_in
 
         return self.logged_in
 
@@ -107,22 +126,34 @@ class Gmail():
         self.username = username
         self.access_token = access_token
 
-        if not self.imap:
+        if not self.connected:
             self.connect()
 
+        auth_string = 'user=%s\1auth=Bearer %s\1\1' % (username, access_token)
         try:
-            auth_string = 'user=%s\1auth=Bearer %s\1\1' % (username, access_token)
             imap_auth = self.imap.authenticate('XOAUTH2', lambda x: auth_string)
-            self.logged_in = (imap_auth and imap_auth[0] == 'OK')
-            if self.logged_in:
+            imap_logged_in = (imap_auth and imap_auth[0] == 'OK')
+            if imap_logged_in:
                 self.fetch_mailboxes()
         except imaplib.IMAP4.error:
             raise AuthenticationError
+
+        try:
+            self.smtp.login('XOAUTH2', base64.b64encode(auth_string))
+            smtp_logged_in = True
+        except (smtplib.SMTPHeloError,
+                smtplib.SMTPAuthenticationError,
+                smtplib.SMTPException):
+            raise AuthenticationError
+
+        self.login = imap_logged_in and smtp_logged_in
 
         return self.logged_in
 
     def logout(self):
         self.imap.logout()
+        self.smtp.quit()
+        self.smtp_connected = False
         self.logged_in = False
 
     def label(self, label_name):
@@ -171,3 +202,8 @@ class Gmail():
 
     def mail_domain(self):
         return self.username.split('@')[-1]
+
+    def send(self, recipients, subject, plain=None, html=None, sender=None, cc=None, bcc=None, attachments=None, headers=None):
+        sender = sender or self.username
+        draft = Draft(self, sender, recipients, subject, plain, html, cc, bcc, attachments, headers)
+        return draft.send()
