@@ -13,7 +13,6 @@ class Gmail():
     GMAIL_IMAP_PORT = 993
 
     # GMail SMTP defaults
-    # TODO: implement SMTP functions
     GMAIL_SMTP_HOST = "smtp.gmail.com"
     GMAIL_SMTP_PORT = 587
 
@@ -31,16 +30,7 @@ class Gmail():
         self.imap_connected = False
         self.smtp_connected = False
 
-        # self.connect()
-
     def connect(self, raise_errors=True):
-        # try:
-        #     self.imap = imaplib.IMAP4_SSL(self.GMAIL_IMAP_HOST, self.GMAIL_IMAP_PORT)
-        # except socket.error:
-        #     if raise_errors:
-        #         raise Exception('Connection failure.')
-        #     self.imap = None
-
         if not self.imap_connected:
             self.imap = imaplib.IMAP4_SSL(self.GMAIL_IMAP_HOST, self.GMAIL_IMAP_PORT)
             self.imap_connected = True

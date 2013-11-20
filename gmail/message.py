@@ -94,11 +94,6 @@ class Message():
         if self.mailbox.name not in ['[Gmail]/Bin', '[Gmail]/Trash']:
             self.move_to(trash)
 
-    # def undelete(self):
-    #     flag = '\\Deleted'
-    #     self.gmail.imap.uid('STORE', self.uid, '-FLAGS', flag)
-    #     if flag in self.flags: self.flags.remove(flag)
-
     def move_to(self, name):
         self.gmail.copy(self.uid, name, self.mailbox.name)
         if name not in ['[Gmail]/Bin', '[Gmail]/Trash']:
@@ -115,7 +110,6 @@ class Message():
 
     def parse_flags(self, headers):
         return list(ParseFlags(headers))
-        # flags = re.search(r'FLAGS \(([^\)]*)\)', headers).groups(1)[0].split(' ')
 
     def parse_labels(self, headers):
         if re.search(r'X-GM-LABELS \(([^\)]+)\)', headers):
