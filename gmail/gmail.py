@@ -1,10 +1,11 @@
-import imaplib
-import smtplib
 import base64
-from mailbox import Mailbox
-from exceptions import AuthenticationError
+import imaplib
 import re
-from draft import Draft
+import smtplib
+
+from .mailbox import Mailbox
+from .exceptions import AuthenticationError
+from .draft import Draft
 
 
 class Gmail():
