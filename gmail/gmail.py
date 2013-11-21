@@ -6,6 +6,7 @@ import smtplib
 from .mailbox import Mailbox
 from .exceptions import AuthenticationError
 from .draft import Draft
+from .utf import decode as decode_utf7, encode as encode_utf7
 
 
 class Gmail():
@@ -51,13 +52,12 @@ class Gmail():
         response, mailbox_list = self.imap.list()
         if response == 'OK':
             for mailbox in mailbox_list:
-                mailbox_name = mailbox.split('"/"')[-1].replace('"', '').strip()
+                mailbox_name = decode_utf7(mailbox.split('"/"')[-1].replace('"', '').strip())
                 self.mailboxes[mailbox_name] = Mailbox(self, mailbox_name)
 
     def use_mailbox(self, mailbox):
         if mailbox:
-            # TODO: utf-7 encode mailbox name
-            self.imap.select(mailbox)
+            self.imap.select(encode_utf7(mailbox))
         self.current_mailbox = mailbox
 
     def mailbox(self, mailbox_name):
@@ -70,7 +70,7 @@ class Gmail():
     def create_mailbox(self, mailbox_name):
         mailbox = self.mailboxes.get(mailbox_name)
         if not mailbox:
-            self.imap.create(mailbox_name)
+            self.imap.create(encode_utf7(mailbox_name))
             mailbox = Mailbox(self, mailbox_name)
             self.mailboxes[mailbox_name] = mailbox
 
@@ -79,7 +79,7 @@ class Gmail():
     def delete_mailbox(self, mailbox_name):
         mailbox = self.mailboxes.get(mailbox_name)
         if mailbox:
-            self.imap.delete(mailbox_name)
+            self.imap.delete(encode_utf7(mailbox_name))
             del self.mailboxes[mailbox_name]
 
     def login(self, username, password):
@@ -157,7 +157,7 @@ class Gmail():
     def copy(self, uid, to_mailbox, from_mailbox=None):
         if from_mailbox:
             self.use_mailbox(from_mailbox)
-        self.imap.uid('COPY', uid, to_mailbox)
+        self.imap.uid('COPY', uid, encode_utf7(to_mailbox))
 
     def fetch_multiple_messages(self, messages):
         fetch_str = ','.join(messages.keys())

@@ -6,7 +6,6 @@ class Mailbox():
 
     def __init__(self, gmail, name="INBOX"):
         self.name = name
-        # TODO: utf-7 encode mailbox name
         self.external_name = encode_utf7(name)
         self.gmail = gmail
         self.date_format = "%d-%b-%Y"
