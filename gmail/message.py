@@ -102,11 +102,34 @@ class Message():
     def archive(self):
         self.move_to('[Gmail]/All Mail')
 
+    def decode_header(self, header):
+        if header:
+            try:
+                header.encode('us-ascii')
+            except UnicodeDecodeError:
+                return header
+            else:
+                return ''.join(text.decode(charset or 'us-ascii')
+                               for text, charset in email.header.decode_header(header))
+        else:
+            return header
+
     def parse_headers(self, message):
         hdrs = {}
         for hdr in message.keys():
-            hdrs[hdr] = message[hdr]
+            hdrs[hdr] = self.decode_header(message[hdr])
         return hdrs
+
+    def parse_addresses(self, addresses):
+        if addresses:
+            return [formatted
+                    for decoded in (self.decode_header(addresses),)
+                    for address in decoded.split(',')
+                    for parsed in (email.utils.parseaddr(address),)
+                    for formatted in (email.utils.formataddr(parsed),)
+                    if formatted]
+        else:
+            return []
 
     def parse_flags(self, headers):
         return list(ParseFlags(headers))
@@ -118,26 +141,35 @@ class Message():
         else:
             return list()
 
+    def get_charset(self, message=None):
+        message = message or self.message
+        return message.get_content_charset() or message.get_charset()
+
     def parse(self, raw_message):
         raw_headers = raw_message[0]
         raw_email = raw_message[1]
 
-        self.message = email.message_from_string(raw_email)
-        self.headers = self.parse_headers(self.message)
+        message = email.message_from_string(raw_email)
+        self.message = message
+        self.headers = self.parse_headers(message)
 
-        self.to = self.message['to']
-        self.fr = self.message['from']
-        self.delivered_to = self.message['delivered_to']
+        froms = self.parse_addresses(message['from'])
+        self.fr = froms[0] if froms else ''
+        self.to = self.parse_addresses(message['to'])
+        self.delivered_to = self.parse_addresses(message['delivered_to'])
 
-        self.subject = self.message['subject']
-        if self.message.get_content_maintype() == "multipart":
-            for content in self.message.walk():
+        self.subject = self.decode_header(message['subject'])
+        content_type = message.get_content_maintype()
+        message_charset = self.get_charset() or 'us-ascii'
+        if content_type == "multipart":
+            for content in message.walk():
                 if content.get_content_type() == "text/plain":
-                    self.body = content.get_payload(decode=True)
-        elif self.message.get_content_maintype() == "text":
-            self.body = self.message.get_payload()
+                    charset = self.get_charset(content) or message_charset
+                    self.body = content.get_payload(decode=True).decode(charset)
+        elif content_type == "text":
+            self.body = message.get_payload().decode(message_charset)
 
-        self.sent_at = datetime.datetime.fromtimestamp(time.mktime(email.utils.parsedate_tz(self.message['date'])[:9]))
+        self.sent_at = datetime.datetime.fromtimestamp(time.mktime(email.utils.parsedate_tz(message['date'])[:9]))
 
         self.flags = self.parse_flags(raw_headers)
 
