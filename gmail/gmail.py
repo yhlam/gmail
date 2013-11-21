@@ -27,6 +27,7 @@ class Gmail():
         self.smtp = None
         self.logged_in = False
         self.mailboxes = {}
+        self.special_mailboxes = {}
         self.current_mailbox = None
 
         self.imap_connected = False
@@ -51,9 +52,16 @@ class Gmail():
     def fetch_mailboxes(self):
         response, mailbox_list = self.imap.list()
         if response == 'OK':
+            regex = re.compile(r'\(\\HasNoChildren( \\(?P<special>\w+))?\) "/" "(?P<name>.+)"')
             for mailbox in mailbox_list:
-                mailbox_name = decode_utf7(mailbox.split('"/"')[-1].replace('"', '').strip())
-                self.mailboxes[mailbox_name] = Mailbox(self, mailbox_name)
+                match = regex.match(mailbox.decode())
+                if match:
+                    binding = match.groupdict()
+                    mailbox_name = decode_utf7(binding['name'])
+                    self.mailboxes[mailbox_name] = Mailbox(self, mailbox_name)
+                    special = binding['special']
+                    if special:
+                        self.special_mailboxes[special] = mailbox_name
 
     def use_mailbox(self, mailbox):
         if mailbox:
@@ -66,6 +74,10 @@ class Gmail():
             self.use_mailbox(mailbox_name)
 
         return mailbox
+
+    def special_mailbox(self, mailbox_name):
+        real_name = self.special_mailboxes.get(mailbox_name)
+        return self.mailbox(real_name)
 
     def create_mailbox(self, mailbox_name):
         mailbox = self.mailboxes.get(mailbox_name)
@@ -150,8 +162,8 @@ class Gmail():
     def label(self, label_name):
         return self.mailbox(label_name)
 
-    def find(self, mailbox_name="[Gmail]/All Mail", **kwargs):
-        box = self.mailbox(mailbox_name)
+    def find(self, mailbox_name=None, **kwargs):
+        box = self.mailbox(mailbox_name) if mailbox_name else self.all_mail()
         return box.mail(**kwargs)
 
     def copy(self, uid, to_mailbox, from_mailbox=None):
@@ -177,19 +189,19 @@ class Gmail():
         return self.mailbox("INBOX")
 
     def spam(self):
-        return self.mailbox("[Gmail]/Spam")
+        return self.special_mailbox("Junk")
 
     def starred(self):
-        return self.mailbox("[Gmail]/Starred")
+        return self.special_mailbox("Flagged")
 
     def all_mail(self):
-        return self.mailbox("[Gmail]/All Mail")
+        return self.special_mailbox("All")
 
     def sent_mail(self):
-        return self.mailbox("[Gmail]/Sent Mail")
+        return self.special_mailbox("Sent")
 
     def important(self):
-        return self.mailbox("[Gmail]/Important")
+        return self.special_mailbox("Important")
 
     def mail_domain(self):
         return self.username.split('@')[-1]
