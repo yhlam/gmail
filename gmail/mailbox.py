@@ -49,7 +49,7 @@ class Mailbox():
 
         response, data = self.gmail.imap.uid('SEARCH', *search)
         if response == 'OK':
-            uids = filter(None, data[0].split(' '))  # filter out empty strings
+            uids = filter(None, data[0].decode().split(' '))  # filter out empty strings
 
             for uid in uids:
                 if not self.messages.get(uid):

@@ -5,6 +5,8 @@ import re
 import time
 from imaplib import ParseFlags
 
+from six import u, binary_type, PY3
+
 
 class Message():
 
@@ -108,10 +110,10 @@ class Message():
         if header:
             try:
                 header.encode('us-ascii')
-            except UnicodeDecodeError:
+            except (UnicodeDecodeError, UnicodeEncodeError):
                 return header
             else:
-                return ''.join(text.decode(charset or 'us-ascii')
+                return ''.join(text.decode(charset or 'us-ascii') if isinstance(text, binary_type) else text
                                for text, charset in email.header.decode_header(header))
         else:
             return header
@@ -149,7 +151,8 @@ class Message():
 
     def parse(self, raw_message):
         raw_headers = raw_message[0]
-        raw_email = raw_message[1]
+        raw_email = raw_message[1].decode('utf-8') if PY3 else raw_message[1]
+        string_headers = raw_headers.decode('utf-8')
 
         message = email.message_from_string(raw_email)
         self.message = message
@@ -173,18 +176,19 @@ class Message():
                     charset = self.get_charset(content) or message_charset
                     self.html_body = content.get_payload(decode=True).decode(charset)
         elif content_type == "text":
-            self.body = message.get_payload().decode(message_charset)
+            payload = message.get_payload()
+            self.body = payload.decode(message_charset) if isinstance(payload, binary_type) else payload
 
         self.sent_at = datetime.datetime.fromtimestamp(time.mktime(email.utils.parsedate_tz(message['date'])[:9]))
 
         self.flags = self.parse_flags(raw_headers)
 
-        self.labels = self.parse_labels(raw_headers)
+        self.labels = self.parse_labels(string_headers)
 
-        if re.search(r'X-GM-THRID (\d+)', raw_headers):
-            self.thread_id = re.search(r'X-GM-THRID (\d+)', raw_headers).groups(1)[0]
-        if re.search(r'X-GM-MSGID (\d+)', raw_headers):
-            self.message_id = re.search(r'X-GM-MSGID (\d+)', raw_headers).groups(1)[0]
+        if re.search(r'X-GM-THRID (\d+)', string_headers):
+            self.thread_id = re.search(r'X-GM-THRID (\d+)', string_headers).groups(1)[0]
+        if re.search(r'X-GM-MSGID (\d+)', string_headers):
+            self.message_id = re.search(r'X-GM-MSGID (\d+)', string_headers).groups(1)[0]
 
     def fetch(self):
         if not self.message:
@@ -231,20 +235,20 @@ class Message():
         return formated
 
     def reply(self, plain=None, html=None, recipients=None, subject=None, sender=None, cc=None, bcc=None, attachments=None, headers=None, append=True):
-        subject = u'RE: {}'.format(self.subject) if subject is None or not subject.startswith('RE: ') else subject
+        subject = u('RE: {}').format(self.subject) if subject is None or not subject.startswith('RE: ') else subject
         recipients = [self.fr] if recipients is None else recipients
         if append:
             time = self.sent_at.strftime('%a, %b %d, %Y at %I:%M %p')
             if plain is not None:
-                header = u'\n\nOn {}, {} wrote:\n\n'.format(time, self.fr)
+                header = u('\n\nOn {}, {} wrote:\n\n').format(time, self.fr)
                 content = self.body.replace('\n', '\n>')
                 plain = plain + header + content
 
             if html is not None:
                 fr = self.html_format_address(self.fr)
-                header = u'<br><br>On {}, {} wrote:<br><br>'.format(time, fr)
+                header = u('<br><br>On {}, {} wrote:<br><br>').format(time, fr)
                 re_body = self.html_body or self.body.replace('\n', '<br>')
-                content = u'<blockquote style="margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex">{}</blackquote>'.format(re_body)
+                content = u('<blockquote style="margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex">{}</blackquote>').format(re_body)
                 html = html + header + content
 
         return self.send_with_reference(recipients, subject, plain, html, sender, cc, bcc, attachments, headers)
@@ -254,24 +258,24 @@ class Message():
         return self.reply(recipients, subject, plain, html, sender, cc, bcc, attachments, headers, append)
 
     def forward(self, recipients, plain=None, html=None, subject=None, sender=None, cc=None, bcc=None, attachments=None, headers=None, append=True):
-        subject = u'FW: {}'.format(self.subject) if subject is None else subject
+        subject = u('FW: {}').format(self.subject) if subject is None else subject
         if append:
             date = self.sent_at.strftime('%a, %b %d, %Y at %I:%M %p')
             if plain is not None:
-                header = (u'\n\n---------- Forwarded message ----------\n'
-                          u'From: {fr}\n'
-                          u'Date: {date}\n'
-                          u'Subject: {subject}\n'
-                          u'To: {to}\n\n').format(fr=self.fr, date=date, subject=self.subject, to=', '.join(map(self.html_format_address, self.to)))
+                header = u('\n\n---------- Forwarded message ----------\n'
+                           'From: {fr}\n'
+                           'Date: {date}\n'
+                           'Subject: {subject}\n'
+                           'To: {to}\n\n').format(fr=self.fr, date=date, subject=self.subject, to=', '.join(map(self.html_format_address, self.to)))
                 plain = plain + header + self.body
 
             if html is not None:
                 fr = self.html_format_address(self.fr)
-                header = (u'<br><br>---------- Forwarded message ----------<br>'
-                          u'From: {fr}<br>'
-                          u'Date: {date}<br>'
-                          u'Subject: {subject}<br>'
-                          u'To: {to}<br><br>').format(fr=fr, date=date, subject=self.subject, to=', '.join(map(self.html_format_address, self.to)))
+                header = u('<br><br>---------- Forwarded message ----------<br>'
+                           'From: {fr}<br>'
+                           'Date: {date}<br>'
+                           'Subject: {subject}<br>'
+                           'To: {to}<br><br>').format(fr=fr, date=date, subject=self.subject, to=', '.join(map(self.html_format_address, self.to)))
                 fw_body = self.html_body or self.body.replace('\n', '<br>')
                 html = html + header + fw_body
 

@@ -174,11 +174,12 @@ class Gmail():
     def fetch_multiple_messages(self, messages):
         fetch_str = ','.join(messages.keys())
         response, results = self.imap.uid('FETCH', fetch_str, '(BODY.PEEK[] FLAGS X-GM-THRID X-GM-MSGID X-GM-LABELS)')
-        for index in xrange(len(results) - 1):
-            raw_message = results[index]
-            if re.search(r'UID (\d+)', raw_message[0]):
-                uid = re.search(r'UID (\d+)', raw_message[0]).groups(1)[0]
-                messages[uid].parse(raw_message)
+        for raw_message in results:
+            if isinstance(raw_message, tuple):
+                search = re.search(r'UID (\d+)', raw_message[0].decode('utf-8'))
+                if search:
+                    uid = search.groups(1)[0]
+                    messages[uid].parse(raw_message)
 
         return messages
 

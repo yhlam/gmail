@@ -24,4 +24,5 @@ setup(
         "Topic :: Communications :: Email",
         "License :: OSI Approved :: MIT License",
     ],
+    install_requires=['six'],
 )
