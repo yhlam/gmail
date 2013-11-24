@@ -1,5 +1,6 @@
 import datetime
 import email
+import itertools
 import re
 import time
 from imaplib import ParseFlags
@@ -222,3 +223,64 @@ class Message():
 
         # combine and sort sent and received messages
         return sorted(dict(received_messages.items() + sent_messages.items()).values(), key=lambda m: m.sent_at)
+
+    def html_format_address(self, address):
+        name, addr = email.utils.parseaddr(self.fr)
+        hyper_addr = '<a href="mailto:{addr}" target="_blank">{addr}</a>'.format(addr=addr)
+        formated = '{} &lt;{}&gt;'.format(name, hyper_addr) if name else hyper_addr
+        return formated
+
+    def reply(self, plain=None, html=None, recipients=None, subject=None, sender=None, cc=None, bcc=None, attachments=None, headers=None, append=True):
+        subject = u'RE: {}'.format(self.subject) if subject is None or not subject.startswith('RE: ') else subject
+        recipients = [self.fr] if recipients is None else recipients
+        if append:
+            time = self.sent_at.strftime('%a, %b %d, %Y at %I:%M %p')
+            if plain is not None:
+                header = u'\n\nOn {}, {} wrote:\n\n'.format(time, self.fr)
+                content = self.body.replace('\n', '\n>')
+                plain = plain + header + content
+
+            if html is not None:
+                fr = self.html_format_address(self.fr)
+                header = u'<br><br>On {}, {} wrote:<br><br>'.format(time, fr)
+                re_body = self.html_body or self.body.replace('\n', '<br>')
+                content = u'<blockquote style="margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex">{}</blackquote>'.format(re_body)
+                html = html + header + content
+
+        return self.send_with_reference(recipients, subject, plain, html, sender, cc, bcc, attachments, headers)
+
+    def reply_all(self, plain=None, html=None, recipients=None, subject=None, sender=None, cc=None, bcc=None, attachments=None, headers=None, append=True):
+        cc = [addr for addr in itertools.chain(self.to, self.cc) if addr != self.fr] if cc is None else cc
+        return self.reply(recipients, subject, plain, html, sender, cc, bcc, attachments, headers, append)
+
+    def forward(self, recipients, plain=None, html=None, subject=None, sender=None, cc=None, bcc=None, attachments=None, headers=None, append=True):
+        subject = u'FW: {}'.format(self.subject) if subject is None else subject
+        if append:
+            date = self.sent_at.strftime('%a, %b %d, %Y at %I:%M %p')
+            if plain is not None:
+                header = (u'\n\n---------- Forwarded message ----------\n'
+                          u'From: {fr}\n'
+                          u'Date: {date}\n'
+                          u'Subject: {subject}\n'
+                          u'To: {to}\n\n').format(fr=self.fr, date=date, subject=self.subject, to=', '.join(map(self.html_format_address, self.to)))
+                plain = plain + header + self.body
+
+            if html is not None:
+                fr = self.html_format_address(self.fr)
+                header = (u'<br><br>---------- Forwarded message ----------<br>'
+                          u'From: {fr}<br>'
+                          u'Date: {date}<br>'
+                          u'Subject: {subject}<br>'
+                          u'To: {to}<br><br>').format(fr=fr, date=date, subject=self.subject, to=', '.join(map(self.html_format_address, self.to)))
+                fw_body = self.html_body or self.body.replace('\n', '<br>')
+                html = html + header + fw_body
+
+        return self.send_with_reference(recipients, subject, plain, html, sender, cc, bcc, attachments, headers)
+
+    def send_with_reference(self, recipients, subject, plain=None, html=None, sender=None, cc=None, bcc=None, attachments=None, headers=None):
+        msg_id = self.message['Message-ID']
+        ref = self.message['References']
+        headers = headers or {}
+        headers['References'] = '{}\n\t{}'.format(ref, msg_id) if ref else msg_id
+        headers['In-Reply-To'] = msg_id
+        return self.gmail.send(recipients, subject, plain, html, sender, cc, bcc, attachments, headers)
