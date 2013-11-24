@@ -17,6 +17,7 @@ class Message():
 
         self.subject = None
         self.body = None
+        self.html_body = None
 
         self.to = None
         self.fr = None
@@ -167,6 +168,9 @@ class Message():
                 if content.get_content_type() == "text/plain":
                     charset = self.get_charset(content) or message_charset
                     self.body = content.get_payload(decode=True).decode(charset)
+                elif content.get_content_type() == "text/html":
+                    charset = self.get_charset(content) or message_charset
+                    self.html_body = content.get_payload(decode=True).decode(charset)
         elif content_type == "text":
             self.body = message.get_payload().decode(message_charset)
 
