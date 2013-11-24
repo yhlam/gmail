@@ -156,6 +156,7 @@ class Message():
         froms = self.parse_addresses(message['from'])
         self.fr = froms[0] if froms else ''
         self.to = self.parse_addresses(message['to'])
+        self.cc = self.parse_addresses(message['cc'])
         self.delivered_to = self.parse_addresses(message['delivered_to'])
 
         self.subject = self.decode_header(message['subject'])
