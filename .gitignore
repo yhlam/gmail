@@ -21,3 +21,7 @@ tmtags
 
 ## Test Account details
 spec/account.yml
+
+
+## Rope
+.ropeproject/
